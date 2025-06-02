@@ -1,31 +1,29 @@
 #!/usr/bin/env python3
-'''
-Copyright (c) 2024 TOYOTA MOTOR CORPORATION
-All rights reserved.
-Redistribution and use in source and binary forms, with or without
-modification, are permitted (subject to the limitations in the disclaimer
-below) provided that the following conditions are met:
-* Redistributions of source code must retain the above copyright notice, this
-  list of conditions and the following disclaimer.
-* Redistributions in binary form must reproduce the above copyright notice,
-  this list of conditions and the following disclaimer in the documentation
-  and/or other materials provided with the distribution.
-* Neither the name of the copyright holder nor the names of its contributors may be used
-  to endorse or promote products derived from this software without specific
-  prior written permission.
-NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY THIS
-LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
-THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
-OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
-DAMAGE.
-'''
+# Copyright (c) 2024 TOYOTA MOTOR CORPORATION
+# All rights reserved.
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted (subject to the limitations in the disclaimer
+# below) provided that the following conditions are met:
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+# * Neither the name of the copyright holder nor the names of its contributors may be used
+#   to endorse or promote products derived from this software without specific
+#   prior written permission.
+# NO EXPRESS OR IMPLIED LICENSES TO ANY PARTY'S PATENT RIGHTS ARE GRANTED BY THIS
+# LICENSE. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+# THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+# GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+# OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
+# DAMAGE.
 # -*- coding: utf-8 -*-
 from abc import (
     ABC,
@@ -63,44 +61,45 @@ from trajectory_msgs.msg import (
     JointTrajectoryPoint,
 )
 
+
 # FIXME
 # from tmc_suction.action import SuctionControl as SuctionControlAction
 # from hsrb_autocharge.action import DockChargeStation
 
-# JOYSTICK-> Coordinate name table for twist conversion
+# Coordinate name table for Joystick->Twist conversion
 _AXIS_NAMES = ["x", "y", "z", "roll", "pitch", "yaw"]
-# Whether there is a voice notification
+# Presence or absence of voice notification
 _DEFAULT_VOICE_NOTIFICATION = False
-# Time until the next command is acceptable [S]
+# Time until the next command can be accepted [s]
 _COMMAND_IGNORE_TIME = 0.5
-# Torque to close the hand [NM]
+# Torque to close the hand [Nm]
 _HAND_CLOSE_TORQUE = -0.018
-# Power to close the hand (force control) [N]
+# Force to close the hand (force control) [N]
 _HAND_CLOSE_FORCE = 0.8
-# Time required to open a hand
+# Time required to open the hand
 _OPEN_TIME_FROM_START = 1.0
 # Hand joint name
 _HAND_JOINT_NAME = "hand_motor_joint"
-# Timeout time of suction action [S]
+# Timeout time for suction action [s]
 _SUCTION_TIMEOUT = 5.0
 
 
 def clamp(value: float, smallest: float, largest: float):
-    """Make the value saturated to the upper and lower limit.
+    """Saturate the value to the upper and lower limits.
 
     Args:a
-        value (float): 値
-        Smallest (Float): Small value
-        Largest (Float): Maximum value
+        value (float): value
+        smallest (float): minimum value
+        largest (float): maximum value
 
     Returns:
-        Float: saturated value
+        float: saturated value
     """
     return min(max(value, smallest), largest)
 
 
 class JoystickControl(ABC):
-    """Joystic control base class."""
+    """Joystick control base class."""
 
     def __init__(self, name: str, node: Node):
         self._name = name
@@ -123,11 +122,11 @@ class JoystickControl(ABC):
 
     @abstractmethod
     def update(self) -> bool:
-        """Update to operation."""
+        """Update for operation."""
         ...
 
     def get_param(self, key: str) -> Any:
-        """Acquisition of parameters."""
+        """Get parameters."""
         value = self._node.get_parameter(f"{self._name}.{key}").value
         if value is None:
             self._node.get_logger().fatal(f"Could not get parameter: {self._name}.{key}.")
@@ -136,19 +135,19 @@ class JoystickControl(ABC):
         return value
 
     def get_params_by_prefix(self, prefix: str) -> Any:
-        """PREFIX below obtained parameter names."""
+        """Get parameter name under a specified prefix."""
         return self._node.get_parameters_by_prefix(f"{self._name}.{prefix}")
 
     def get_name(self) -> str:
-        """Acquire the control name."""
+        """Get control name."""
         return self._name
 
     def get_notification(self) -> bool:
-        """Acquisition of audio notification."""
+        """Get voice notification."""
         return self._voice_notification
 
     def check_all_buttons_pressed(self, msg: Joy) -> bool:
-        """Judgment is whether all the specified buttons are pressed."""
+        """Judge whether all specified buttons are pressed."""
         buttons = itemgetter(*self._buttons)(msg.buttons)
         if isinstance(buttons, int):
             return buttons == 1
@@ -157,7 +156,7 @@ class JoystickControl(ABC):
 
 
 class JointControl(JoystickControl):
-    """Class that controls joints to 2 axes."""
+    """Class for controlling up to 2 axes of a joint."""
 
     def __init__(self, name: str, node: Node):
         super().__init__(name, node)
@@ -167,9 +166,9 @@ class JointControl(JoystickControl):
             JointVelocity,
             "pseudo_velocity_controller/ref_joint_velocity",
             1)
-        # Acquisition of parameters
+        # Get parameters
         self._joint_settings = self._node.get_parameters_by_prefix(self._name)
-        # Obtain the joint name to be operated
+        # Get the name of the target joint for operation
         self._target_joints = []
         for name in self._joint_settings.keys():
             if "joint" in name:
@@ -187,7 +186,7 @@ class JointControl(JoystickControl):
                 scale_factor = 0.0
                 if axis >= 0 and len(msg.axes) > axis:
                     scale_factor = clamp(msg.axes[axis], -1.0, 1.0)
-                # Ignore if it is not exceeding the unusual zone
+                # Ignore if it does not exceed the dead zone
                 if math.fabs(scale_factor) > self._dead_zone:
                     joint_velocity.name.append(name)
                     joint_velocity.velocity.append(velocity * scale_factor)
@@ -199,14 +198,14 @@ class JointControl(JoystickControl):
 
 
 class SingleJointControl(JointControl):
-    """Class to control one axis."""
+    """Class for controlling a 1-axis joint."""
 
     def __init__(self, name: str, node: Node):
         super().__init__(name, node)
 
 
 class MultiJointControl(JointControl):
-    """2 -axis joint control class."""
+    """Class for controlling a 2-axis joint."""
 
     def __init__(self, name: str, node: Node):
         super().__init__(name, node)
@@ -215,21 +214,21 @@ class MultiJointControl(JointControl):
 
 
 class TwistControl(JoystickControl):
-    """Twist operation control class."""
+    """Twist motion control class."""
 
     def __init__(self, name: str, node: Node):
         super().__init__(name, node)
 
         self._dead_zone = self.get_param("dead_zone")
 
-        # Reading AXIS parameters
+        # Load axis parameters
         self._axis_map = {}
         for name, param in self.get_params_by_prefix("axis").items():
             if name not in _AXIS_NAMES:
                 continue
             self._axis_map[name] = param.value
 
-        # Reading Scale parameters
+        # Load scale parameters
         self._scale_map = {}
         for name, param in self.get_params_by_prefix("scale").items():
             if name not in _AXIS_NAMES:
@@ -237,8 +236,8 @@ class TwistControl(JoystickControl):
             self._scale_map[name] = param.value
 
     def calc_twist(self, msg: Joy) -> Tuple[bool, Twist]:
-        """Twist calculation ..."""
-        # Output if you are all in the unusual zone or at least one.
+        """Calculate Twist."""
+        # If everything is within the dead zone or if even one is outside, output
         twist_out = Twist()
         is_twist_output_valid = False
         for name, axis in self._axis_map.items():
@@ -264,7 +263,7 @@ class TwistControl(JoystickControl):
 
 
 class BaseControl(TwistControl):
-    """Class to control trolleys."""
+    """Class to control cart movement."""
 
     def __init__(self, name: str, node: Node):
         super().__init__(name, node)
@@ -280,14 +279,14 @@ class BaseControl(TwistControl):
 
     def update(self, msg: Joy) -> bool:
         if self.check_all_buttons_pressed(msg):
-            # The return value is not determined because it is issued even when the speed is 0
-            # Because I want to stop the trolley immediately when the input is gone
+            # The return value is not judged in order to issue even when the speed is 0
+            # Because we want to stop the cart immediately when the input is gone
             _, twist = self.calc_twist(msg)
             self._command_velocity_pub.publish(twist)
             self._is_published = True
             return True
         else:
-            # When the bogie movement valid button is separated, set the speed to 0
+            # Set speed to 0 when the cart movement enable button is released
             if self._is_published:
                 twist = Twist()
                 self._command_velocity_pub.publish(twist)
@@ -309,7 +308,7 @@ class OneTimeControl(JoystickControl):
         if self._last_control_time is not None:
             if (now - self._last_control_time) < Duration(seconds=_COMMAND_IGNORE_TIME):
                 return False
-        # Be sure to execute the first time
+        # It must be executed the first time
         updated = self.update_once(msg)
         if updated:
             self._last_control_time = now
@@ -321,7 +320,7 @@ class OneTimeControl(JoystickControl):
 
 
 class HandControl(OneTimeControl):
-    """Hand opening and closing execution class."""
+    """Hand open/close execution class."""
 
     def __init__(self, name: str, node: Node):
         super().__init__(name, node)
@@ -355,14 +354,14 @@ class HandControl(OneTimeControl):
     def update_once(self, msg: Joy) -> bool:
         if self.check_all_buttons_pressed(msg):
             if msg.buttons[self._force_enable_button] == 1:
-                # Grip -in control
+                # Grip control
                 if self._hand_open:
                     self._close(self._apply_force_client, _HAND_CLOSE_FORCE)
                 else:
-                    # Open only half
+                    # Open halfway
                     self._open(self._half_open_angle)
             else:
-                # Hand opening and closing
+                # Hand open/close
                 if self._hand_open:
                     self._close(self._grasp_client, _HAND_CLOSE_TORQUE)
                 else:
@@ -386,7 +385,7 @@ class DrivePowerControl(OneTimeControl):
     def update_once(self, msg: Joy) -> bool:
         if self.check_all_buttons_pressed(msg) and msg.buttons[self._servo_enable_button] == 1:
             # Servo command
-            # Inverse the state
+            # Invert the state
             self._servo_on = not self._servo_on
             servo_status = Bool()
             servo_status.data = self._servo_on
@@ -396,7 +395,7 @@ class DrivePowerControl(OneTimeControl):
 
 
 class SuctionControl(OneTimeControl):
-    """Success execution class."""
+    """Suction execution class."""
 
     def __init__(self, name: str, node: Node):
         super().__init__(name, node)
@@ -409,8 +408,8 @@ class SuctionControl(OneTimeControl):
 
     def update_once(self, msg: Joy) -> bool:
         if self.check_all_buttons_pressed(msg):
-            # attract
-            # Inverse the state
+            # Suction
+            # Invert the state
             self._suction_on = not self._suction_on
             # FIXME
             # suction_command = SuctionControlAction.Goal()
@@ -440,7 +439,7 @@ class AutoChargeDockControl(OneTimeControl):
 
 
 class EndeffectorControl(TwistControl):
-    """Class that controls hand movement."""
+    """Class to control end-effector movement."""
 
     def __init__(self, name: str, node: Node):
         super().__init__(name, node)
@@ -456,11 +455,11 @@ class EndeffectorControl(TwistControl):
     def update(self, msg: Joy) -> bool:
         if self.check_all_buttons_pressed(msg):
             twist_stamped = TwistStamped()
-            # Do not issue if there is no input or all within a non -sensitive zone
+            # Do not issue if there is no input or if all are within the dead zone
             is_valid, twist_stamped.twist = self.calc_twist(msg)
             if is_valid:
                 twist_stamped.header.frame_id = self._frame
-                # When including a trolley movement
+                # Including cart movement
                 if msg.buttons[self._hand_with_base_button] == 1:
                     self._hand_velocity_with_base_pub.publish(twist_stamped)
                 else:
@@ -470,7 +469,7 @@ class EndeffectorControl(TwistControl):
 
 
 class PoseControl(OneTimeControl):
-    """Stock transition class."""
+    """Posture transition class."""
 
     def __init__(self, name: str, node: Node):
         super().__init__(name, node)
@@ -496,8 +495,8 @@ class InitPoseControl(PoseControl):
 
     def update_once(self, msg: Joy) -> bool:
         if self.check_all_buttons_pressed(msg):
-            # Confirm that other buttons are not pushed at the same time
-            # Because the dynamic preservation of the posture and the button are covered
+            # Check if other buttons are not pressed simultaneously
+            # Because it overlaps with dynamic storage of posture and button
             pushed_buttons = [pushed == 1 and i not in self._buttons
                               for i, pushed in enumerate(msg.buttons)]
             if any(pushed_buttons):
@@ -523,7 +522,7 @@ class DefaultPoseControl(PoseControl):
 
 
 class DynamicStoragePoseControl(PoseControl):
-    """Dynamic preservation posture transition class."""
+    """Dynamic storage posture transition class."""
 
     def __init__(self, name: str, node: Node):
         super().__init__(name, node)
@@ -543,8 +542,8 @@ class DynamicStoragePoseControl(PoseControl):
 
     def update_once(self, msg: Joy) -> bool:
         if msg.buttons[self._pose_enable_button] == 1 and msg.buttons[self._pose_save_button] == 1:
-            # Dynamic preservation of default posture
-            # Search in the order of joint name used in the prescribed posture, and acquire the position of the corresponding joint
+            # Dynamic storage of predefined posture
+            # Search in the order of joint names used in the predefined posture and get the position of the corresponding joint
             if self._joint_states is None:
                 self._node.get_logger().info("joint_state has not been received yet.")
                 return False
@@ -562,7 +561,7 @@ class DynamicStoragePoseControl(PoseControl):
 
 
 class JoystickControlManager(Node):
-    """Joystic control management class."""
+    """Joystick control management class."""
 
     def __init__(self, joy_config_path: Optional[str] = None):
         if joy_config_path is None:
@@ -592,7 +591,7 @@ class JoystickControlManager(Node):
 
         joystick_config = self.get_parameters_by_prefix("controls")
 
-        # Generate an instance according to Type when initializing
+        # Generate instance according to type during initialization
         controls = []
         for name, _type in joystick_config.items():
             split_name = name.split(".")
@@ -628,15 +627,15 @@ class JoystickControlManager(Node):
             self.get_logger().fatal("Set controller to joystick_control/controls at least 1.")
             self.destroy_node()
             rclpy.shutdown()
-        # Sort in order of high elements of buttons_
+        # Sort in descending order of the number of elements in buttons_
         self._controls = sorted(controls, key=len, reverse=True)
 
     def joy_callback(self, msg: Joy) -> None:
-        """Joystic input callback."""
+        """Joystick input callback."""
         for c in self._controls:
-            # Call the Update of each controller and do not carry out other operations if it is operated.
+            # Call update of each controller, if operated, do not perform other operations
             if c.update(msg):
-                # When the controller changes, notify with voice (when audio notification is valid)
+                # Notify by voice when the controller changes (if voice notification is enabled)
                 mode = c.get_name()
                 if self._pre_mode != mode and c.get_notification():
                     self.voice_publish(mode)
@@ -644,7 +643,7 @@ class JoystickControlManager(Node):
                 break
 
     def voice_publish(self, sentence: str) -> None:
-        """Dprial."""
+        """Speech."""
         if self._voice_notification_on.value:
             voice = Voice()
             voice.sentence = sentence.replace("controls.", "")

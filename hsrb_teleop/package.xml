@@ -1,0 +1,20 @@
+<package format="3">
+  <name>hsrb_teleop</name>
+  <version>2.0.1</version>
+  <description>Meta package: hsrb_teleop</description>
+
+  <maintainer email="xr-hsr-support@mail.toyota.co.jp">HSR Support</maintainer>
+
+  <license>BSD 3-clause Clear License</license>
+
+  <url type="website">None</url>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>hsrb_pseudo_endeffector_controller</exec_depend>
+  <exec_depend>hsrb_joystick_teleop</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

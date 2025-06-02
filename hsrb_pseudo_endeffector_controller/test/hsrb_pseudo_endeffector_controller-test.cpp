@@ -121,6 +121,10 @@ class RobotStatePublisher {
     odom_pub_->publish(odom);
   }
 
+  void PublishOdom(const nav_msgs::msg::Odometry& odom) {
+    odom_pub_->publish(odom);
+  }
+
  private:
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_states_pub_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
@@ -234,7 +238,7 @@ void PseudoEndeffectorControllerTest::ClearSubscribers() {
 }
 
 
-// Test of issuance cycle restriction
+// Test publishing cycle limitation
 TEST_F(PseudoEndeffectorControllerTest, PublishRate) {
   bool has_param = false;
   for (auto i = 0; i < default_options_.parameter_overrides().size(); ++i) {
@@ -263,7 +267,7 @@ TEST_F(PseudoEndeffectorControllerTest, PublishRate) {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
   }
-  // The ideal is only 10 because it is only issued, but it may not be 10 at the timing of PUB/SUB, about 8 should come out stably.
+  // It is only the issued amount, so ideally it is 10, but due to pub/sub timing, it may not be 10. It should consistently output around 8.
   EXPECT_GT(arm_command_sub_->count(), 8);
   EXPECT_LE(arm_command_sub_->count(), 10);
 
@@ -277,17 +281,17 @@ TEST_F(PseudoEndeffectorControllerTest, PublishRate) {
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
   }
-  // Since it is limited to 40Hz, the ideal is 20, but it should be less than 20, close to 20.
+  // Limited to 40Hz, ideally 20, but as long as it is below 20 and relatively close, it's fine
   EXPECT_GT(arm_command_sub_->count(), 15);
   EXPECT_LE(arm_command_sub_->count(), 20);
 }
 
-// /Test when there is no Robot_description
+// Test when /robot_description is missing
 TEST_F(PseudoEndeffectorControllerTest, NoRobotDescription) {
   EXPECT_ANY_THROW(server_node_ = std::make_shared<PseudoEndeffectorController>());
 }
 
-// If Joints_states, etc., do not issue Command
+// Do not issue a command if joints_states, etc., cannot be obtained
 TEST_F(PseudoEndeffectorControllerTest, NoRobotState) {
   server_node_ = std::make_shared<PseudoEndeffectorController>(default_options_);
 
@@ -298,7 +302,7 @@ TEST_F(PseudoEndeffectorControllerTest, NoRobotState) {
   ValidateFailure();
 }
 
-// A frame that does not exist
+// Non-existent frame
 TEST_F(PseudoEndeffectorControllerTest, InvalidFrameName) {
   server_node_ = std::make_shared<PseudoEndeffectorController>(default_options_);
   robot_state_pub_->ResetRobotState(std::bind(&PseudoEndeffectorControllerTest::SpinSome, this));
@@ -310,7 +314,7 @@ TEST_F(PseudoEndeffectorControllerTest, InvalidFrameName) {
   ValidateFailure();
 }
 
-// Testing with Hand_palm_link is the standard frame without a bogie movement
+// Test with the stationary base frame as hand_palm_link
 TEST_F(PseudoEndeffectorControllerTest, CommandVelocityOnHandFrame) {
   server_node_ = std::make_shared<PseudoEndeffectorController>(default_options_);
   robot_state_pub_->ResetRobotState(std::bind(&PseudoEndeffectorControllerTest::SpinSome, this));
@@ -326,9 +330,9 @@ TEST_F(PseudoEndeffectorControllerTest, CommandVelocityOnHandFrame) {
   ASSERT_TRUE(IsSuccess());
   const auto first_command = ReceiveCommandTrajectory();
   // Posture after 0.5 seconds
-  // The other axis also moves slightly, so make the expected value from the output value.
-  // Check if 0.05 in the vertical direction (mainly lift)
-  // Check if the wrist ROLL axis is rotating -0.05
+  // Since other axes move slightly, create expected values from output values
+  // Check if it has risen by 0.05 in the vertical direction (mainly lift)
+  // Check if the wrist roll axis has rotated by -0.05
   EXPECT_DOUBLE_EQ(first_command.at("time_from_start"), 0.5);
   EXPECT_NEAR(first_command.at("odom_x"), 0.0, kEpsilon);
   EXPECT_NEAR(first_command.at("odom_y"), 0.0, kEpsilon);
@@ -347,7 +351,7 @@ TEST_F(PseudoEndeffectorControllerTest, CommandVelocityOnHandFrame) {
   ASSERT_TRUE(IsSuccess());
   const auto second_command = ReceiveCommandTrajectory();
   // Posture after 0.75 seconds
-  // Similarly, check the vertical direction and wrist ROLL axis.
+  // Similarly, focus on checking the vertical direction and wrist roll axis
   EXPECT_DOUBLE_EQ(second_command.at("time_from_start"), 0.5);
   EXPECT_NEAR(second_command.at("odom_x"), 0.0, kEpsilon);
   EXPECT_NEAR(second_command.at("odom_y"), 0.0, kEpsilon);
@@ -359,7 +363,7 @@ TEST_F(PseudoEndeffectorControllerTest, CommandVelocityOnHandFrame) {
   EXPECT_NEAR(second_command.at("wrist_roll_joint"), -0.1 * 0.75, kEpsilon);
 }
 
-// Even if the command value is sent continuously, solve the IK using the current value
+// Solve IK using current values even when continuous command values are sent
 TEST_F(PseudoEndeffectorControllerTest, CloseLoopControl) {
   default_options_.parameter_overrides().push_back(rclcpp::Parameter("open_loop_control", false));
   server_node_ = std::make_shared<PseudoEndeffectorController>(default_options_);
@@ -374,7 +378,7 @@ TEST_F(PseudoEndeffectorControllerTest, CloseLoopControl) {
 
   ASSERT_TRUE(IsSuccess());
   const auto first_command = ReceiveCommandTrajectory();
-  // The posture after 0.5 seconds, raising the rise axis, the trolley does not move.
+  // Posture after 0.5 seconds should be raising the lift axis while moving the hand forward, trolley does not move
   EXPECT_DOUBLE_EQ(first_command.at("time_from_start"), 0.5);
   EXPECT_NEAR(first_command.at("odom_x"), 0.0, kEpsilon);
   EXPECT_NEAR(first_command.at("odom_y"), 0.0, kEpsilon);
@@ -394,7 +398,7 @@ TEST_F(PseudoEndeffectorControllerTest, CloseLoopControl) {
 
   ASSERT_TRUE(IsSuccess());
   const auto second_command = ReceiveCommandTrajectory();
-  // The posture after 0.75 seconds, the movement of the bogie will be feedback, so the arm is almost moved.
+  // Posture after 0.75 seconds, since trolley movement is fed back, the arm moves very little
   EXPECT_DOUBLE_EQ(second_command.at("time_from_start"), 0.5);
   EXPECT_NEAR(second_command.at("odom_x"), 0.1 * 0.75, kEpsilon);
   EXPECT_NEAR(second_command.at("odom_y"), 0.0, kEpsilon);
@@ -406,7 +410,7 @@ TEST_F(PseudoEndeffectorControllerTest, CloseLoopControl) {
   EXPECT_NEAR(second_command.at("wrist_roll_joint"), 0.0, kEpsilon);
 }
 
-// If the command value is continuously sent, solve the IK without feedback on the present value
+// Solve IK without feeding back current values when continuous command values are sent
 TEST_F(PseudoEndeffectorControllerTest, OpenLoopControl) {
   default_options_.parameter_overrides().push_back(rclcpp::Parameter("open_loop_control", true));
   server_node_ = std::make_shared<PseudoEndeffectorController>(default_options_);
@@ -421,7 +425,7 @@ TEST_F(PseudoEndeffectorControllerTest, OpenLoopControl) {
 
   ASSERT_TRUE(IsSuccess());
   const auto first_command = ReceiveCommandTrajectory();
-  // The posture after 0.5 seconds, the rising axis should be raised, and the hands should be put forward, but the bogie does not move because it is a setting without a trolley.
+  // Posture after 0.5 seconds should be raising the lift axis while moving the hand forward, with no trolley movement setting, so the trolley does not move
   EXPECT_DOUBLE_EQ(first_command.at("time_from_start"), 0.5);
   EXPECT_NEAR(first_command.at("odom_x"), 0.0, kEpsilon);
   EXPECT_NEAR(first_command.at("odom_y"), 0.0, kEpsilon);
@@ -441,7 +445,7 @@ TEST_F(PseudoEndeffectorControllerTest, OpenLoopControl) {
 
   ASSERT_TRUE(IsSuccess());
   const auto second_command = ReceiveCommandTrajectory();
-  // Posture after 0.75 seconds, the movement of the bogie is not feedback+no trolle has been set, so put out more hands.
+  // Posture after 0.75 seconds, since trolley movement is not fed back + no trolley movement setting, the hand moves further
   EXPECT_DOUBLE_EQ(second_command.at("time_from_start"), 0.5);
   EXPECT_NEAR(second_command.at("odom_x"), 0.0, kEpsilon);
   EXPECT_NEAR(second_command.at("odom_y"), 0.0, kEpsilon);
@@ -453,7 +457,7 @@ TEST_F(PseudoEndeffectorControllerTest, OpenLoopControl) {
   EXPECT_NEAR(second_command.at("wrist_roll_joint"), 0.0, kEpsilon);
 }
 
-// Test with Base_footPrint for the bogie without movement
+// Test stationary base frame as base_footprint
 TEST_F(PseudoEndeffectorControllerTest, CommandVelocityOnFootprint) {
   server_node_ = std::make_shared<PseudoEndeffectorController>(default_options_);
   robot_state_pub_->ResetRobotState(std::bind(&PseudoEndeffectorControllerTest::SpinSome, this));
@@ -466,9 +470,9 @@ TEST_F(PseudoEndeffectorControllerTest, CommandVelocityOnFootprint) {
 
   ASSERT_TRUE(IsSuccess());
   const auto first_command = ReceiveCommandTrajectory();
-  // The other axis also moves slightly, so make the expected value from the output value.
-  // Check if 0.05 in the vertical direction (mainly lift)
-  // Check if the wrist ROLL axis is rotating -0.05
+  // Since other axes move slightly, create expected values from output values
+  // Check if it has risen by 0.05 in the vertical direction (mainly lift)
+  // Check if the wrist roll axis has rotated by -0.05
   EXPECT_DOUBLE_EQ(first_command.at("time_from_start"), 0.5);
   EXPECT_NEAR(first_command.at("odom_x"), 0.0, kEpsilon);
   EXPECT_NEAR(first_command.at("odom_y"), 0.0, kEpsilon);
@@ -480,7 +484,7 @@ TEST_F(PseudoEndeffectorControllerTest, CommandVelocityOnFootprint) {
   EXPECT_NEAR(first_command.at("wrist_roll_joint"), -0.1 * 0.5, kEpsilon);
 }
 
-// Testing with trolleys has been tested with Hand_palm_link
+// Test trolley movement frame as hand_palm_link
 TEST_F(PseudoEndeffectorControllerTest, CommandVelocityWithBaseOnHandFrame) {
   server_node_ = std::make_shared<PseudoEndeffectorController>(default_options_);
   robot_state_pub_->ResetRobotState(std::bind(&PseudoEndeffectorControllerTest::SpinSome, this));
@@ -492,8 +496,8 @@ TEST_F(PseudoEndeffectorControllerTest, CommandVelocityWithBaseOnHandFrame) {
 
   ASSERT_TRUE(IsSuccess());
   const auto first_command = ReceiveCommandTrajectory();
-  // The bogie moves (the expected value is created from the answer)
-  // Confirm that the bogie (ODOM_X) moves nearly 0.05
+  // Trolley moves (creating expected values from the answer)
+  // Confirm that the trolley (odom_x) moves by about 0.05
   EXPECT_DOUBLE_EQ(first_command.at("time_from_start"), 0.5);
   EXPECT_NEAR(first_command.at("odom_x"), 0.046, kEpsilon);
   EXPECT_NEAR(first_command.at("odom_y"), 0.0, kEpsilon);
@@ -505,7 +509,7 @@ TEST_F(PseudoEndeffectorControllerTest, CommandVelocityWithBaseOnHandFrame) {
   EXPECT_NEAR(first_command.at("wrist_roll_joint"), 0.0, kEpsilon);
 }
 
-// Testing with bogie movement with Base_footPrint
+// Test trolley movement frame as base_footprint
 TEST_F(PseudoEndeffectorControllerTest, CommandVelocityWithBaseOnFootprint) {
   server_node_ = std::make_shared<PseudoEndeffectorController>(default_options_);
   robot_state_pub_->ResetRobotState(std::bind(&PseudoEndeffectorControllerTest::SpinSome, this));
@@ -517,8 +521,8 @@ TEST_F(PseudoEndeffectorControllerTest, CommandVelocityWithBaseOnFootprint) {
 
   ASSERT_TRUE(IsSuccess());
   const auto first_command = ReceiveCommandTrajectory();
-  // The bogie moves (the expected value is created from the answer)
-  // Confirm that the bogie (ODOM_X) moves nearly 0.05
+  // Trolley moves (creating expected values from the answer)
+  // Confirm that the trolley (odom_x) moves by about 0.05
   EXPECT_DOUBLE_EQ(first_command.at("time_from_start"), 0.5);
   EXPECT_NEAR(first_command.at("odom_x"), 0.046, kEpsilon);
   EXPECT_NEAR(first_command.at("odom_y"), 0.0, kEpsilon);
@@ -530,7 +534,7 @@ TEST_F(PseudoEndeffectorControllerTest, CommandVelocityWithBaseOnFootprint) {
   EXPECT_NEAR(first_command.at("wrist_roll_joint"), 0.0, kEpsilon);
 }
 
-// IK without trolleys has failed
+// Stationary IK fails
 TEST_F(PseudoEndeffectorControllerTest, CommandVelocityIKFailed) {
   server_node_ = std::make_shared<PseudoEndeffectorController>(default_options_);
   robot_state_pub_->ResetRobotState(std::bind(&PseudoEndeffectorControllerTest::SpinSome, this));
@@ -543,7 +547,7 @@ TEST_F(PseudoEndeffectorControllerTest, CommandVelocityIKFailed) {
   ValidateFailure();
 }
 
-// IK failed with trolleys
+// Moving IK fails
 TEST_F(PseudoEndeffectorControllerTest, CommandVelocityWithBaseIKFailed) {
   server_node_ = std::make_shared<PseudoEndeffectorController>(default_options_);
   robot_state_pub_->ResetRobotState(std::bind(&PseudoEndeffectorControllerTest::SpinSome, this));
@@ -556,7 +560,7 @@ TEST_F(PseudoEndeffectorControllerTest, CommandVelocityWithBaseIKFailed) {
   ValidateFailure();
 }
 
-// Test for IK_Delta = 1000, Velocity_duration = 10
+// Test when ik_delta=1000 and velocity_duration=10
 TEST_F(PseudoEndeffectorControllerTest, WithParameter) {
   default_options_.parameter_overrides().push_back(rclcpp::Parameter("velocity_duration", 10.0));
   default_options_.parameter_overrides().push_back(rclcpp::Parameter("ik_delta", 1000.0));
@@ -570,8 +574,8 @@ TEST_F(PseudoEndeffectorControllerTest, WithParameter) {
 
   ASSERT_TRUE(IsSuccess());
   const auto first_command = ReceiveCommandTrajectory();
-  // Confirm that IK_DELTA is large, so the state that does not move at all will be solved.
-  // Confirm that the default value of Time_from_start becomes 10.0
+  // Confirm that the solution results in no movement state due to large ik_delta
+  // Confirm that the default value of time_from_start becomes 10.0
   EXPECT_DOUBLE_EQ(first_command.at("time_from_start"), 10.0);
   EXPECT_NEAR(first_command.at("odom_x"), 0.0, kEpsilon);
   EXPECT_NEAR(first_command.at("odom_y"), 0.0, kEpsilon);
@@ -583,7 +587,7 @@ TEST_F(PseudoEndeffectorControllerTest, WithParameter) {
   EXPECT_NEAR(first_command.at("wrist_roll_joint"), 0.0, kEpsilon);
 }
 
-// Testing whether the bogie weight is reflected
+// Test if the trolley weight is reflected
 TEST_F(PseudoEndeffectorControllerTest, IkBaseWeights) {
   server_node_ = std::make_shared<PseudoEndeffectorController>(default_options_);
   robot_state_pub_->ResetRobotState(std::bind(&PseudoEndeffectorControllerTest::SpinSome, this));
@@ -608,12 +612,12 @@ TEST_F(PseudoEndeffectorControllerTest, IkBaseWeights) {
   ASSERT_TRUE(IsSuccess());
   const auto test_command = ReceiveCommandTrajectory();
 
-  // Instead of not moving, you should put your hands forward with your shoulder Flex.
+  // Instead of moving the trolley, it should extend the hand forward with shoulder flex
   EXPECT_LT(test_command.at("odom_x"), default_command.at("odom_x"));
   EXPECT_LT(test_command.at("arm_flex_joint"), default_command.at("arm_flex_joint"));
 }
 
-// Testing whether arm weight is reflected
+// Test if the arm weight is reflected
 TEST_F(PseudoEndeffectorControllerTest, IkArmWeights) {
   server_node_ = std::make_shared<PseudoEndeffectorController>(default_options_);
   robot_state_pub_->ResetRobotState(std::bind(&PseudoEndeffectorControllerTest::SpinSome, this));
@@ -638,11 +642,36 @@ TEST_F(PseudoEndeffectorControllerTest, IkArmWeights) {
   ASSERT_TRUE(IsSuccess());
   const auto test_command = ReceiveCommandTrajectory();
 
-  // Since the shoulder Flex does not move, it should move on the bogie
+  // Since shoulder flex doesn't move, it should be achieved by moving the trolley
   EXPECT_GT(test_command.at("odom_x"), default_command.at("odom_x"));
   EXPECT_GT(test_command.at("arm_flex_joint"), default_command.at("arm_flex_joint"));
 }
 
+// Test if parts other than odom yaw rotation are ignored
+TEST_F(PseudoEndeffectorControllerTest, IgnoreOdomPitchRoll) {
+  server_node_ = std::make_shared<PseudoEndeffectorController>(default_options_);
+  robot_state_pub_->ResetRobotState(std::bind(&PseudoEndeffectorControllerTest::SpinSome, this));
+
+  // ros2 run tf2_ros static_transform_publisher --roll 0.1 --pitch 0.1 --yaw 1.0 --frame-id hoge --child-frame-id piyo
+  // Inserting values created from the constructed rotation
+  nav_msgs::msg::Odometry odom;
+  odom.pose.pose.orientation.x = 0.019875;
+  odom.pose.pose.orientation.y = 0.067737;
+  odom.pose.pose.orientation.z = 0.476036;
+  odom.pose.pose.orientation.w = 0.876588;
+  robot_state_pub_->PublishOdom(odom);
+  SpinSome();
+
+  geometry_msgs::msg::TwistStamped twist;
+  twist.header.frame_id = "hand_palm_link";
+  twist.twist.linear.z = 0.01;
+  command_velocity_with_base_pub_->publish(twist);
+
+  ASSERT_TRUE(IsSuccess());
+  const auto first_command = ReceiveCommandTrajectory();
+  // It is a slight movement, so odom_t should hardly change from 1.0
+  EXPECT_NEAR(first_command.at("odom_t"), 1.0, 0.01);
+}
 
 }  // namespace hsrb_pseudo_endeffector_controller
 

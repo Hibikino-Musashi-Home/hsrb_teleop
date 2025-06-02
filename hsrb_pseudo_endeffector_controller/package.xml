@@ -1,12 +1,12 @@
 <package format="3">
   <name>hsrb_pseudo_endeffector_controller</name>
-  <version>2.0.0</version>
-  <description>Pseudo endeffector controller</description>
+  <version>2.0.1</version>
+  <description>Pseudo end-effector controller</description>
   <maintainer email="xr-hsr-support@mail.toyota.co.jp">HSR Support</maintainer>
 
   <license>BSD 3-clause Clear License</license>
 
-  <author>Keisuke Takeshita</author>
+  <url type="website">http://toyota.co.jp</url>
   <author>Tamaki Nishino</author>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

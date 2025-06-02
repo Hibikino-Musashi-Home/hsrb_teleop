@@ -36,25 +36,25 @@ DAMAGE.
 #include <tmc_utils/qos.hpp>
 
 namespace {
-// Numerical IK tolerance error
+// Numerical IK tolerance
 const double kDefaultIKDelta = 1.0e-3;
-// Supplementary time during speed control
+// Completion time during speed control
 const double kDefaultVelocityDuration = 0.5;
-// Numerical IK maximum number of repetitions
+// Numerical IK maximum iteration count
 const int32_t kMaxItrIK = 1000;
-// Numerical IK tolerance fluctuation
+// Numerical IK allowable fluctuation
 const double kIKConvergeThreshold = 1.0e-10;
-// Skilled value that judges that the command has been interrupted [SEC]
+// Threshold to determine if the command is interrupted [sec]
 const double kDefaultDiscontinuousPeriod = 0.5;
-// Hand frame name default value
+// Default value for hand frame name
 const char* const kDefaultEndEffectorFrame = "hand_palm_link";
-// Default value of joint name used for IK
+// Default value for joint names used in IK
 const std::vector<std::string> kDefaultUseJoints = {"arm_lift_joint", "arm_flex_joint", "arm_roll_joint",
                                                     "wrist_flex_joint", "wrist_roll_joint"};
-// The default value of the arm track controller
+// Default value for arm trajectory controller
 const std::vector<std::string> kTrajectoryControllers = {"arm_trajectory_controller"};
 
-// Make twist to Transform (duration)
+// Convert Twist to Transform (multiply duration)
 void TwistToTransform(const geometry_msgs::msg::Twist& twist,
                       double duration,
                       Eigen::Affine3d& transform_out) {
@@ -63,9 +63,9 @@ void TwistToTransform(const geometry_msgs::msg::Twist& twist,
       Eigen::AngleAxisd(twist.angular.x, Eigen::Vector3d::UnitX()) *
       Eigen::AngleAxisd(twist.angular.y, Eigen::Vector3d::UnitY()) *
       Eigen::AngleAxisd(twist.angular.z, Eigen::Vector3d::UnitZ());
-  // Angular is an interpolation with SLERP
+  // angular is interpolated with slerp
   transform_out = zero.slerp(duration, angular);
-  // LINEAR just applies duration
+  // linear is just multiplied by duration
   transform_out.translation() <<
       twist.linear.x * duration,
       twist.linear.y * duration,
@@ -76,13 +76,13 @@ void CalcOriginToNextEnd(const Eigen::Affine3d& origin_to_end,
                          const Eigen::Affine3d& origin_to_frame,
                          const Eigen::Affine3d& transform,
                          Eigen::Affine3d& dst_origin_to_next_end) {
-  // Endeffector-> Coordinates to reference frames
+  // Coordinate transformation from end-effector to reference frame
   Eigen::Affine3d end_to_frame = origin_to_end.inverse() * origin_to_frame;
-  // Match the origin
+  // Align origins
   end_to_frame.translation() << 0.0, 0.0, 0.0;
-  // Convert Transform, the origin of the reference frame, to the origin of Endeffector
+  // Convert the transform of the reference frame origin to the end-effector origin
   Eigen::Affine3d end_on_transform = end_to_frame * transform * end_to_frame.inverse();
-  // Find the position of the following ENDEFFECTOR
+  // Calculate the position of the next end-effector
   dst_origin_to_next_end = origin_to_end * end_on_transform;
 }
 }  // anonymous namespace
@@ -98,9 +98,9 @@ PseudoEndeffectorController::PseudoEndeffectorController(const rclcpp::NodeOptio
   endeffector_frame_name_ = tmc_utils::GetParameter(this, "end_effector_frame", kDefaultEndEffectorFrame);
   use_joints_ = tmc_utils::GetParameter(this, "use_joints", kDefaultUseJoints);
   ik_arm_weights_ = GetWeightParameter("ik_arm_weights", use_joints_.size());
-  // The bogie is assumed to be 3 degree of freedom of ODOM_X/Y/T
+  // Assume the vehicle has 3 degrees of freedom: odom_x/y/t
   ik_base_weights_ = GetWeightParameter("ik_base_weights", 3);
-  // Joint_trajectory_controller was named consciously
+  // Named with consideration of joint_trajectory_controller
   open_loop_control_ = tmc_utils::GetParameter(this, "open_loop_control", false);
 
   double publish_rate = tmc_utils::GetParameter(this, "publish_rate", 30.0);
@@ -115,7 +115,7 @@ PseudoEndeffectorController::PseudoEndeffectorController(const rclcpp::NodeOptio
   ik_solver_ = std::make_shared<tmc_robot_kinematics_model::NumericIKSolver>(
       tmc_robot_kinematics_model::IKSolver::Ptr(), robot_, kMaxItrIK, ik_delta, kIKConvergeThreshold);
 
-  // Publisher creation
+  // Create Publisher
   const auto controllers = tmc_utils::GetParameter(this, "arm_controllers", kTrajectoryControllers);
   for (const auto& controller_name : controllers) {
     arm_command_pubs_.push_back(
@@ -125,8 +125,8 @@ PseudoEndeffectorController::PseudoEndeffectorController(const rclcpp::NodeOptio
       "omni_base_controller/joint_trajectory", tmc_utils::ReliableVolatileQoS());
   success_pub_ = create_publisher<std_msgs::msg::Bool>("~/success", tmc_utils::ReliableVolatileQoS());
 
-  // Subscriper creation
-  // The command value is a prerequisite that will fly continuously, so make it to Best_effort.
+  // Create Subscriber
+  // Assumed command values come continuously, so use BEST_EFFORT
   command_velocity_sub_ = create_subscription<geometry_msgs::msg::TwistStamped>(
       "~/command_velocity", tmc_utils::BestEffortQoS(),
       std::bind(&PseudoEndeffectorController::CommandVelocityCallback, this, std::placeholders::_1));
@@ -142,44 +142,46 @@ PseudoEndeffectorController::PseudoEndeffectorController(const rclcpp::NodeOptio
       std::bind(&PseudoEndeffectorController::OdomCallback, this, std::placeholders::_1));
 }
 
-// Update the state of the robot from the latest Joint_states, ODOM
+// Update the robot's status from the latest joint_states, odom
 bool PseudoEndeffectorController::UpdateJointState() {
   if (!latest_joint_states_ || !latest_odom_) {
     RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 5 * 1000, "joint_states or odom is not subscribed yet");
     return false;
   }
 
-  // Convert the contents of JOINT_STATES to JointState type
+  // Convert contents of joint_states to JointState type
   tmc_manipulation_types::JointState joint_state;
   // TODO(Takeshita) tmc_manipulation_types_bridgeのROS2化
   joint_state.name = latest_joint_states_->name;
   joint_state.position =
       Eigen::VectorXd::Map(latest_joint_states_->position.data(), latest_joint_states_->position.size());
 
-  // Convert the content of ODOM to Eigen :: affinE3D type
+  // Convert odom content to Eigen::Affine3d type
   Eigen::Affine3d origin_to_base;
+  // Only planar movement is assumed, so zero out other than z
+  // Depending on the odom source, x, y values might be filled, causing unintended behavior with opposite eulerAngles results
   origin_to_base = Eigen::Quaterniond(latest_odom_->pose.pose.orientation.w,
-                                      latest_odom_->pose.pose.orientation.x,
-                                      latest_odom_->pose.pose.orientation.y,
+                                      0.0,
+                                      0.0,
                                       latest_odom_->pose.pose.orientation.z);
   origin_to_base.translation() <<
       latest_odom_->pose.pose.position.x,
       latest_odom_->pose.pose.position.y,
       latest_odom_->pose.pose.position.z;
 
-  // renew
+  // Update
   robot_->SetRobotTransform(origin_to_base);
   robot_->SetNamedAngle(tmc_manipulation_types::ExtractPartialJointState(joint_state, use_joints_));
   return true;
 }
 
-// Publish Command from the current robot status
+// Issue command from the current robot state
 void PseudoEndeffectorController::PublishJointCommand(const rclcpp::Time& stamp, double duration) const {
-  // Robot_'s posture is updated
+  // Assume the robot_'s orientation is updated
   const tmc_manipulation_types::JointState joint_state_out = robot_->GetNamedAngle(use_joints_);
   const int32_t num_joints = use_joints_.size();
 
-  // Create JointTrajectory for ARM
+  // Create JointTrajectory for arm
   trajectory_msgs::msg::JointTrajectory arm_trajectory;
   arm_trajectory.joint_names = use_joints_;
   arm_trajectory.points.resize(1);
@@ -191,7 +193,7 @@ void PseudoEndeffectorController::PublishJointCommand(const rclcpp::Time& stamp,
   }
   arm_trajectory.points[0].time_from_start = rclcpp::Duration::from_seconds(duration);
 
-  // Create JointTrajectory for Base
+  // Create JointTrajectory for base
   trajectory_msgs::msg::JointTrajectory base_trajectory;
   base_trajectory.joint_names.push_back("odom_x");
   base_trajectory.joint_names.push_back("odom_y");
@@ -218,7 +220,7 @@ void PseudoEndeffectorController::PublishJointCommand(const rclcpp::Time& stamp,
   base_command_pub_->publish(base_trajectory);
 }
 
-// Calculate the state of the robot after moving
+// Compute the robot state after moving the end-effector
 bool PseudoEndeffectorController::CalcNextState(
     const tmc_manipulation_types::BaseMovementType& base_type,
     const Eigen::Affine3d& origin_to_next_end) {
@@ -248,7 +250,7 @@ bool PseudoEndeffectorController::CalcNextState(
   return true;
 }
 
-// Command_velocity -based callback common processing
+// Common process for command_velocity callbacks
 void PseudoEndeffectorController::VelocityCallback(
     const geometry_msgs::msg::TwistStamped::SharedPtr& command,
     const tmc_manipulation_types::BaseMovementType& base_type) {
@@ -266,7 +268,7 @@ void PseudoEndeffectorController::VelocityCallback(
   }
 
   if (diff_period > discontinuous_period_ || command->header.frame_id != last_command_frame_) {
-    // Processing as a new command => Processing from the current value
+    // Process as a new command => Process from current value
     if (open_loop_control_) {
       if (!UpdateJointState()) {
         PublishIsSuccess(false);
@@ -283,7 +285,7 @@ void PseudoEndeffectorController::VelocityCallback(
       return;
     }
   } else {
-    // Process as a continuous command value => Calculate the ideal movement and process it
+    // Process as continuous command values => Calculate and process ideal movement
     Eigen::Affine3d desired_transform;
     TwistToTransform(last_command_value_, diff_period, desired_transform);
     CalcOriginToNextEnd(origin_to_end_, origin_to_base_, desired_transform, origin_to_end_);
@@ -306,19 +308,19 @@ void PseudoEndeffectorController::VelocityCallback(
   PublishIsSuccess(result);
 }
 
-// Command_velocity callback
+// Callback for command_velocity
 void PseudoEndeffectorController::CommandVelocityCallback(
     const geometry_msgs::msg::TwistStamped::SharedPtr command) {
   VelocityCallback(command, tmc_manipulation_types::kRotationZ);
 }
 
-// Command_velocity_with_base callback
+// Callback for command_velocity_with_base
 void PseudoEndeffectorController::CommandVelocityWithBaseCallback(
     const geometry_msgs::msg::TwistStamped::SharedPtr command) {
   VelocityCallback(command, tmc_manipulation_types::kPlanar);
 }
 
-// Publish a success or fail
+// Publish success or failure
 void PseudoEndeffectorController::PublishIsSuccess(bool result) {
   std_msgs::msg::Bool success;
   success.data = result;

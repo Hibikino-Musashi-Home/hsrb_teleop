@@ -47,22 +47,22 @@ DAMAGE.
 
 namespace hsrb_pseudo_endeffector_controller {
 
-// Pseudo -hand control controller class
+// Pseudo End Effector Control Controller Class
 class PseudoEndeffectorController : public rclcpp::Node {
  public:
   PseudoEndeffectorController();
   explicit PseudoEndeffectorController(const rclcpp::NodeOptions& options);
 
  private:
-  // Update the state of the robot from the latest Joint_states, ODOM
+  // Update the robot's state from the latest joint_states and odom
   bool UpdateJointState();
-  // Publish Command from the current robot status
+  // Issue command from the current state of the robot
   void PublishJointCommand(const rclcpp::Time& stamp, double duration) const;
-  // Calculate the state of the robot after moving
+  // Calculate the robot's state after moving the end effector
   bool CalcNextState(const tmc_manipulation_types::BaseMovementType& base_type,
                      const Eigen::Affine3d& origin_to_next_end);
 
-  // Command_velocity -based callback common processing
+  // Common processing for command_velocity callbacks
   void VelocityCallback(const geometry_msgs::msg::TwistStamped::SharedPtr& command,
                         const tmc_manipulation_types::BaseMovementType& base_type);
 
@@ -72,7 +72,7 @@ class PseudoEndeffectorController : public rclcpp::Node {
   void JointStatesCallback(const sensor_msgs::msg::JointState::SharedPtr state) { latest_joint_states_ = state; }
   void OdomCallback(const nav_msgs::msg::Odometry::SharedPtr odom) { latest_odom_ = odom; }
 
-  // Publish a success or fail
+  // Issue success or failure
   void PublishIsSuccess(bool result);
 
   rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr command_velocity_sub_;
@@ -89,34 +89,34 @@ class PseudoEndeffectorController : public rclcpp::Node {
 
   // Robot model
   tmc_robot_kinematics_model::IRobotKinematicsModel::Ptr robot_;
-  // IK Solva
+  // IK Solver
   tmc_robot_kinematics_model::IKSolver::Ptr ik_solver_;
 
-  // EndefFFECTOR frame name
+  // End effector's frame name
   std::string endeffector_frame_name_;
-  // Operating joints
+  // Joint to be actuated
   std::vector<std::string> use_joints_;
   // IK joint weight
   Eigen::VectorXd ik_arm_weights_;
   Eigen::VectorXd ik_base_weights_;
-  // Interpolation time during speed control
+  // Interpolation time for velocity control
   double velocity_duration_;
 
-  // EndefFECTOR posture
+  // Pose of the End Effector
   Eigen::Affine3d origin_to_end_;
-  // Attachment of the command value criterion frame
+  // Pose of the reference frame for command values
   Eigen::Affine3d origin_to_base_;
-  // The previous command value
+  // Previous command value
   geometry_msgs::msg::Twist last_command_value_;
-  // Time when the previous command flew
+  // Time when the previous command arrived
   rclcpp::Time last_command_stamp_;
-  // Standard frame in the previous command
+  // Reference frame for the previous command
   std::string last_command_frame_;
-  // Skilled values ​​that determine that a continuous command has been interrupted [SEC]
+  // Threshold to determine if continuous commands are interrupted [sec]
   double discontinuous_period_;
-  // With true, if the command is not interrupted, the current joint status does not feedback.
+  // If true, do not feedback the current joint state when commands are not interrupted
   bool open_loop_control_;
-  // Publishing period[s]
+  // Issue cycle [s]
   std::optional<double> publish_period_;
 
   Eigen::VectorXd GetWeightParameter(const std::string& parameter_name, uint32_t dof);
