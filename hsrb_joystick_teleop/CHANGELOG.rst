@@ -2,6 +2,11 @@
 Changelog for package hsrb_joystick_teleop
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2.0.2 (2025-07-29)
+-------------------
+* simulator support for apply_force
+* Contributors: Katsushi FUkuoka
+
 2.0.1 (2025-04-22)
 -------------------
 * Assume odometry is on a planar surface

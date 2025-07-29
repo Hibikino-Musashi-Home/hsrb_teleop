@@ -29,22 +29,36 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
 from launch_ros.actions import Node
+from launch.substitutions import LaunchConfiguration
+
+def declare_arguments():
+    declared_arguments = []
+
+    declared_arguments.append(
+        DeclareLaunchArgument('hand_close_force',
+                              default_value='0.8'))
+
+    return declared_arguments
 
 
 def generate_launch_description():
+
     basic_config = os.path.join(
         get_package_share_directory('hsrb_joystick_teleop'),
         'config',
         'joystick_control_config.yaml')
 
-    return LaunchDescription([
-        Node(
-            package='hsrb_joystick_teleop',
-            executable='joystick_control_node',
-            output='screen',
-            emulate_tty=True,
-            remappings=[('/command_velocity', '/omni_base_controller/cmd_vel')],
-            parameters=[basic_config]
-        )
-    ])
+    joystick_control_node = Node(
+        package='hsrb_joystick_teleop',
+        executable='joystick_control_node',
+        output='screen',
+        emulate_tty=True,
+        remappings=[('/command_velocity', '/omni_base_controller/cmd_vel')],
+        parameters=[basic_config, {'hand_close_force': LaunchConfiguration('hand_close_force')}
+        ]
+    )
+
+    return LaunchDescription(declare_arguments()
+                             + [joystick_control_node])

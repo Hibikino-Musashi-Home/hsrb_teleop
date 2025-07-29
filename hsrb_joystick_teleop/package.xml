@@ -1,7 +1,7 @@
 <package format="3">
   <name>hsrb_joystick_teleop</name>
-  <version>2.0.1</version>
-  <description>HSR joystick teleoperation</description>
+  <version>2.0.2</version>
+  <description>HSR joystick teleop</description>
 
   <maintainer email="xr-hsr-support@mail.toyota.co.jp">HSR Support</maintainer>
 
