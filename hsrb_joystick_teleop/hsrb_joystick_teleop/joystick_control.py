@@ -70,30 +70,28 @@ from trajectory_msgs.msg import (
 _AXIS_NAMES = ["x", "y", "z", "roll", "pitch", "yaw"]
 # Presence or absence of voice notification
 _DEFAULT_VOICE_NOTIFICATION = False
-# Time until the next command can be accepted [s]
+# Time [s] until the next command can be received
 _COMMAND_IGNORE_TIME = 0.5
-# Torque to close the hand [Nm]
-_HAND_CLOSE_TORQUE = -0.018
-# Force to close the hand (force control) [N]
-_HAND_CLOSE_FORCE = 0.8
+# Torque [Nm] to close the hand
+_HAND_CLOSE_TORQUE = -0.05
 # Time required to open the hand
 _OPEN_TIME_FROM_START = 1.0
 # Hand joint name
 _HAND_JOINT_NAME = "hand_motor_joint"
-# Timeout time for suction action [s]
+# Timeout duration [s] for suction action
 _SUCTION_TIMEOUT = 5.0
 
 
 def clamp(value: float, smallest: float, largest: float):
-    """Saturate the value to the upper and lower limits.
+    """Saturate the value to its upper and lower limits.
 
     Args:a
-        value (float): value
-        smallest (float): minimum value
-        largest (float): maximum value
+        value (float): Value
+        smallest (float): Minimum value
+        largest (float): Maximum value
 
     Returns:
-        float: saturated value
+        float: Saturated value
     """
     return min(max(value, smallest), largest)
 
@@ -135,7 +133,7 @@ class JoystickControl(ABC):
         return value
 
     def get_params_by_prefix(self, prefix: str) -> Any:
-        """Get parameter name under a specified prefix."""
+        """Get parameter names under prefix."""
         return self._node.get_parameters_by_prefix(f"{self._name}.{prefix}")
 
     def get_name(self) -> str:
@@ -143,11 +141,11 @@ class JoystickControl(ABC):
         return self._name
 
     def get_notification(self) -> bool:
-        """Get voice notification."""
+        """Acquire voice notification."""
         return self._voice_notification
 
     def check_all_buttons_pressed(self, msg: Joy) -> bool:
-        """Judge whether all specified buttons are pressed."""
+        """Determine if all specified buttons are pressed."""
         buttons = itemgetter(*self._buttons)(msg.buttons)
         if isinstance(buttons, int):
             return buttons == 1
@@ -156,7 +154,7 @@ class JoystickControl(ABC):
 
 
 class JointControl(JoystickControl):
-    """Class for controlling up to 2 axes of a joint."""
+    """Class to control up to 2-axis joints."""
 
     def __init__(self, name: str, node: Node):
         super().__init__(name, node)
@@ -168,7 +166,7 @@ class JointControl(JoystickControl):
             1)
         # Get parameters
         self._joint_settings = self._node.get_parameters_by_prefix(self._name)
-        # Get the name of the target joint for operation
+        # Acquire target joint name
         self._target_joints = []
         for name in self._joint_settings.keys():
             if "joint" in name:
@@ -198,14 +196,14 @@ class JointControl(JoystickControl):
 
 
 class SingleJointControl(JointControl):
-    """Class for controlling a 1-axis joint."""
+    """Class to control single-axis joints."""
 
     def __init__(self, name: str, node: Node):
         super().__init__(name, node)
 
 
 class MultiJointControl(JointControl):
-    """Class for controlling a 2-axis joint."""
+    """Class to control 2-axis joints."""
 
     def __init__(self, name: str, node: Node):
         super().__init__(name, node)
@@ -221,14 +219,14 @@ class TwistControl(JoystickControl):
 
         self._dead_zone = self.get_param("dead_zone")
 
-        # Load axis parameters
+        # Read axis parameter
         self._axis_map = {}
         for name, param in self.get_params_by_prefix("axis").items():
             if name not in _AXIS_NAMES:
                 continue
             self._axis_map[name] = param.value
 
-        # Load scale parameters
+        # Read scale parameter
         self._scale_map = {}
         for name, param in self.get_params_by_prefix("scale").items():
             if name not in _AXIS_NAMES:
@@ -237,7 +235,7 @@ class TwistControl(JoystickControl):
 
     def calc_twist(self, msg: Joy) -> Tuple[bool, Twist]:
         """Calculate Twist."""
-        # If everything is within the dead zone or if even one is outside, output
+        # If all are within the dead zone, output if even one exceeds it
         twist_out = Twist()
         is_twist_output_valid = False
         for name, axis in self._axis_map.items():
@@ -279,8 +277,8 @@ class BaseControl(TwistControl):
 
     def update(self, msg: Joy) -> bool:
         if self.check_all_buttons_pressed(msg):
-            # The return value is not judged in order to issue even when the speed is 0
-            # Because we want to stop the cart immediately when the input is gone
+            # No return value judgment is done to issue even when speed is 0
+            # Want to stop the cart immediately when there is no input
             _, twist = self.calc_twist(msg)
             self._command_velocity_pub.publish(twist)
             self._is_published = True
@@ -308,7 +306,7 @@ class OneTimeControl(JoystickControl):
         if self._last_control_time is not None:
             if (now - self._last_control_time) < Duration(seconds=_COMMAND_IGNORE_TIME):
                 return False
-        # It must be executed the first time
+        # Execute on the first time
         updated = self.update_once(msg)
         if updated:
             self._last_control_time = now
@@ -335,10 +333,12 @@ class HandControl(OneTimeControl):
         self._force_enable_button = self.get_param("force_enable_button")
         self._open_angle = math.radians(self.get_param("open_angle_deg"))
         self._half_open_angle = math.radians(self.get_param("half_open_angle_deg"))
+        self._hand_close_force = self._node.get_parameter("hand_close_force").value
 
     def _close(self, action_client: ActionClient, effort: float) -> None:
         hand_command = GripperApplyEffort.Goal()
         hand_command.effort = effort
+        hand_command.do_control_stop = True
         action_client.send_goal_async(hand_command)
 
     def _open(self, positions: float) -> None:
@@ -356,7 +356,7 @@ class HandControl(OneTimeControl):
             if msg.buttons[self._force_enable_button] == 1:
                 # Grip control
                 if self._hand_open:
-                    self._close(self._apply_force_client, _HAND_CLOSE_FORCE)
+                    self._close(self._apply_force_client, self._hand_close_force)
                 else:
                     # Open halfway
                     self._open(self._half_open_angle)
@@ -439,7 +439,7 @@ class AutoChargeDockControl(OneTimeControl):
 
 
 class EndeffectorControl(TwistControl):
-    """Class to control end-effector movement."""
+    """Class for controlling end-effector movement."""
 
     def __init__(self, name: str, node: Node):
         super().__init__(name, node)
@@ -455,7 +455,7 @@ class EndeffectorControl(TwistControl):
     def update(self, msg: Joy) -> bool:
         if self.check_all_buttons_pressed(msg):
             twist_stamped = TwistStamped()
-            # Do not issue if there is no input or if all are within the dead zone
+            # If there is no input or all are within the dead zone, do not issue
             is_valid, twist_stamped.twist = self.calc_twist(msg)
             if is_valid:
                 twist_stamped.header.frame_id = self._frame
@@ -495,8 +495,8 @@ class InitPoseControl(PoseControl):
 
     def update_once(self, msg: Joy) -> bool:
         if self.check_all_buttons_pressed(msg):
-            # Check if other buttons are not pressed simultaneously
-            # Because it overlaps with dynamic storage of posture and button
+            # Check if other buttons are pressed simultaneously
+            # Because it overlaps with dynamic posture saving and buttons
             pushed_buttons = [pushed == 1 and i not in self._buttons
                               for i, pushed in enumerate(msg.buttons)]
             if any(pushed_buttons):
@@ -507,7 +507,7 @@ class InitPoseControl(PoseControl):
 
 
 class DefaultPoseControl(PoseControl):
-    """Standard posture transition class."""
+    """Defined posture transition class."""
 
     def __init__(self, name: str, node: Node):
         super().__init__(name, node)
@@ -522,7 +522,7 @@ class DefaultPoseControl(PoseControl):
 
 
 class DynamicStoragePoseControl(PoseControl):
-    """Dynamic storage posture transition class."""
+    """Dynamic save posture transition class."""
 
     def __init__(self, name: str, node: Node):
         super().__init__(name, node)
@@ -542,8 +542,8 @@ class DynamicStoragePoseControl(PoseControl):
 
     def update_once(self, msg: Joy) -> bool:
         if msg.buttons[self._pose_enable_button] == 1 and msg.buttons[self._pose_save_button] == 1:
-            # Dynamic storage of predefined posture
-            # Search in the order of joint names used in the predefined posture and get the position of the corresponding joint
+            # Dynamic save of defined posture
+            # Search in the order of joint names used for defined posture and acquire positions of applicable joints
             if self._joint_states is None:
                 self._node.get_logger().info("joint_state has not been received yet.")
                 return False
@@ -591,7 +591,7 @@ class JoystickControlManager(Node):
 
         joystick_config = self.get_parameters_by_prefix("controls")
 
-        # Generate instance according to type during initialization
+        # Generate instances according to the type at initialization
         controls = []
         for name, _type in joystick_config.items():
             split_name = name.split(".")
@@ -627,15 +627,15 @@ class JoystickControlManager(Node):
             self.get_logger().fatal("Set controller to joystick_control/controls at least 1.")
             self.destroy_node()
             rclpy.shutdown()
-        # Sort in descending order of the number of elements in buttons_
+        # Sort buttons_ in descending order of number of elements
         self._controls = sorted(controls, key=len, reverse=True)
 
     def joy_callback(self, msg: Joy) -> None:
         """Joystick input callback."""
         for c in self._controls:
-            # Call update of each controller, if operated, do not perform other operations
+            # Call the update of each controller and do not execute other operations if it is operated
             if c.update(msg):
-                # Notify by voice when the controller changes (if voice notification is enabled)
+                # Notify by voice if the controller changes (if voice notification is enabled)
                 mode = c.get_name()
                 if self._pre_mode != mode and c.get_notification():
                     self.voice_publish(mode)
