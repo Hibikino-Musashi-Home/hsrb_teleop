@@ -24,9 +24,9 @@
           y: 0
           yaw: 3
         scale:
-          x: 1.6
-          y: 1.6
-          yaw: 5.0
+          x: 1.2
+          y: 1.2
+          yaw: 4.0
       endeffector_control:
         type: endeffector_control
         button: 5
