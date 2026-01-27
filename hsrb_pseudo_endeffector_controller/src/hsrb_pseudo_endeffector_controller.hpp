@@ -47,7 +47,7 @@ DAMAGE.
 
 namespace hsrb_pseudo_endeffector_controller {
 
-// Pseudo End Effector Control Controller Class
+// Pseudo end-effector control class
 class PseudoEndeffectorController : public rclcpp::Node {
  public:
   PseudoEndeffectorController();
@@ -56,9 +56,9 @@ class PseudoEndeffectorController : public rclcpp::Node {
  private:
   // Update the robot's state from the latest joint_states and odom
   bool UpdateJointState();
-  // Issue command from the current state of the robot
+  // Issue commands based on the current state of the robot
   void PublishJointCommand(const rclcpp::Time& stamp, double duration) const;
-  // Calculate the robot's state after moving the end effector
+  // Calculate the robot's state after moving the end-effector
   bool CalcNextState(const tmc_manipulation_types::BaseMovementType& base_type,
                      const Eigen::Affine3d& origin_to_next_end);
 
@@ -89,34 +89,34 @@ class PseudoEndeffectorController : public rclcpp::Node {
 
   // Robot model
   tmc_robot_kinematics_model::IRobotKinematicsModel::Ptr robot_;
-  // IK Solver
+  // IK solver
   tmc_robot_kinematics_model::IKSolver::Ptr ik_solver_;
 
-  // End effector's frame name
+  // Frame name of the end-effector
   std::string endeffector_frame_name_;
-  // Joint to be actuated
+  // Joints to be operated
   std::vector<std::string> use_joints_;
-  // IK joint weight
+  // Joint weights for IK
   Eigen::VectorXd ik_arm_weights_;
   Eigen::VectorXd ik_base_weights_;
-  // Interpolation time for velocity control
+  // Interpolation time during velocity control
   double velocity_duration_;
 
-  // Pose of the End Effector
+  // Pose of the EndEffector
   Eigen::Affine3d origin_to_end_;
   // Pose of the reference frame for command values
   Eigen::Affine3d origin_to_base_;
-  // Previous command value
+  // Previous command values
   geometry_msgs::msg::Twist last_command_value_;
-  // Time when the previous command arrived
+  // Time when the previous command was received
   rclcpp::Time last_command_stamp_;
   // Reference frame for the previous command
   std::string last_command_frame_;
-  // Threshold to determine if continuous commands are interrupted [sec]
+  // Threshold [sec] to determine if continuous commands have been interrupted
   double discontinuous_period_;
   // If true, do not feedback the current joint state when commands are not interrupted
   bool open_loop_control_;
-  // Issue cycle [s]
+  // Issuance cycle [s]
   std::optional<double> publish_period_;
 
   Eigen::VectorXd GetWeightParameter(const std::string& parameter_name, uint32_t dof);
