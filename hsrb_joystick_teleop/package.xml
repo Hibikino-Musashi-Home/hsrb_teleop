@@ -1,6 +1,6 @@
 <package format="3">
   <name>hsrb_joystick_teleop</name>
-  <version>2.0.2</version>
+  <version>2.0.3</version>
   <description>HSR joystick teleop</description>
 
   <maintainer email="xr-hsr-support@mail.toyota.co.jp">HSR Support</maintainer>
@@ -17,6 +17,7 @@
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>tmc_control_msgs</exec_depend>
   <exec_depend>tmc_msgs</exec_depend>
+  <exec_depend>tmc_utils_py</exec_depend>
   <exec_depend>tmc_voice_msgs</exec_depend>
   <exec_depend>trajectory_msgs</exec_depend>
   
