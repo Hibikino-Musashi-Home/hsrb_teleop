@@ -240,6 +240,8 @@
 
     assisted_voice_notification: true
 
+    hand_close_force: 0.8
+
     no_type:
       button: 1
       voice_notification: false
