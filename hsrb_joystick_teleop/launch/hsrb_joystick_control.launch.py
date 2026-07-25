@@ -30,8 +30,9 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
+
 
 def declare_arguments():
     declared_arguments = []
@@ -56,8 +57,7 @@ def generate_launch_description():
         output='screen',
         emulate_tty=True,
         remappings=[('/command_velocity', '/omni_base_controller/cmd_vel')],
-        parameters=[basic_config, {'hand_close_force': LaunchConfiguration('hand_close_force')}
-        ]
+        parameters=[basic_config, {'hand_close_force': LaunchConfiguration('hand_close_force')}]
     )
 
     return LaunchDescription(declare_arguments()
